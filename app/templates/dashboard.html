@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AppSec SOC Security Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Heroicons / FontAwesome (Optional, using SVG) -->
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen font-sans flex flex-col">
+
+    <!-- Header / Navbar -->
+    <header class="bg-gray-900 border-b border-gray-800 px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div class="flex items-center gap-3">
+            <span class="p-2 bg-red-600 rounded-lg text-white font-black animate-pulse">🛡️</span>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight text-white">AppSec Monitor & Protection Service</h1>
+                <p class="text-xs text-gray-400">Security Operations Center (SOC) | Real-time Core Gateway Protection</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 bg-gray-850 px-4 py-2 rounded-lg border border-gray-800">
+                <span class="text-xs text-gray-400 uppercase">Gateway Mode:</span>
+                <span id="currentModeBadge" class="text-xs font-black px-2.5 py-1 rounded bg-red-950 text-red-400 border border-red-800">ENFORCEMENT</span>
+                <button onclick="toggleMode()" class="text-xs bg-gray-700 hover:bg-gray-650 text-white font-medium px-3 py-1 rounded transition duration-200">
+                    Alterar
+                </button>
+            </div>
+            <button onclick="refreshDashboard()" class="p-2 bg-gray-850 hover:bg-gray-800 text-gray-300 rounded-lg border border-gray-800 transition duration-150" title="Refresh Now">
+                🔄
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-1 p-6 space-y-6 max-w-[1600px] w-full mx-auto">
+
+        <!-- Top Metrics Row -->
+        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Total Inspected Requests -->
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-gray-400 uppercase font-semibold">Total Inspected</p>
+                    <h3 id="statTotalInspected" class="text-3xl font-black mt-1 text-white">0</h3>
+                </div>
+                <div class="p-3 bg-blue-950 text-blue-400 rounded-lg border border-blue-800 text-2xl">⚡</div>
+            </div>
+
+            <!-- Blocked Attacks -->
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-gray-400 uppercase font-semibold">Blocked Attacks</p>
+                    <h3 id="statBlocked" class="text-3xl font-black mt-1 text-red-500">0</h3>
+                </div>
+                <div class="p-3 bg-red-950 text-red-400 rounded-lg border border-red-800 text-2xl">🚫</div>
+            </div>
+
+            <!-- Flagged Attacks -->
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-gray-400 uppercase font-semibold">Flagged (Audited)</p>
+                    <h3 id="statFlagged" class="text-3xl font-black mt-1 text-yellow-500">0</h3>
+                </div>
+                <div class="p-3 bg-yellow-950 text-yellow-400 rounded-lg border border-yellow-800 text-2xl">⚠️</div>
+            </div>
+
+            <!-- Active Blocklisted IPs -->
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-gray-400 uppercase font-semibold">Active Blocked IPs</p>
+                    <h3 id="statBlockedIPs" class="text-3xl font-black mt-1 text-purple-400">0</h3>
+                </div>
+                <div class="p-3 bg-purple-950 text-purple-400 rounded-lg border border-purple-800 text-2xl">🔒</div>
+            </div>
+        </section>
+
+        <!-- Charts and Config Row -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Threat Distribution Chart -->
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 lg:col-span-1">
+                <h4 class="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 bg-red-500 rounded-full"></span> Threat Distribution (OWASP + ML)
+                </h4>
+                <div class="h-60 flex items-center justify-center relative">
+                    <canvas id="threatChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Manual Blocklist IP & Quick Config -->
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 lg:col-span-1 flex flex-col justify-between space-y-4">
+                <div>
+                    <h4 class="text-sm font-bold text-gray-200 mb-3 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 bg-purple-500 rounded-full"></span> IP Blocklist Management
+                    </h4>
+                    <div class="space-y-3">
+                        <div class="flex gap-2">
+                            <input id="blockIpInput" type="text" placeholder="IP Address (ex: 192.168.1.15)" class="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200 flex-1 focus:outline-none focus:ring-1 focus:ring-purple-600">
+                            <button onclick="blockIP()" class="bg-purple-700 hover:bg-purple-650 text-white px-4 py-2 rounded-lg text-sm font-semibold transition duration-150">Bloquear</button>
+                        </div>
+                        <div id="activeBlockedIpsList" class="max-h-36 overflow-y-auto custom-scrollbar space-y-2 text-xs">
+                            <!-- Blocked IPs will load dynamically -->
+                            <p class="text-gray-500 italic">No blocked IPs loaded.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-800 pt-4">
+                    <h4 class="text-sm font-bold text-gray-200 mb-3 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 bg-blue-500 rounded-full"></span> Dynamic AI Engine Operations
+                    </h4>
+                    <div class="flex items-center justify-between gap-4">
+                        <span class="text-xs text-gray-400">Trigger Isolation Forest Retraining on logged metadata:</span>
+                        <button onclick="retrainModel()" class="bg-blue-700 hover:bg-blue-650 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition duration-150 whitespace-nowrap">Retrain ML</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Global Configurations -->
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 lg:col-span-1">
+                <h4 class="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 bg-yellow-500 rounded-full"></span> Operational Global Policy Config
+                </h4>
+                <form id="configForm" onsubmit="saveConfig(event)" class="space-y-3.5 text-xs">
+                    <div>
+                        <label class="block text-gray-400 mb-1">Protection Engine Mode</label>
+                        <select id="configMode" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-yellow-500">
+                            <option value="enforcement">Enforcement (Active blocking / HTTP 403)</option>
+                            <option value="audit">Audit-Only (Inspect, flag and pass through)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-400 mb-1">Burst Rate Limit (Requests per minute per IP)</label>
+                        <input id="configRateLimit" type="number" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-yellow-500">
+                    </div>
+                    <div>
+                        <label class="block text-gray-400 mb-1">Slack/Discord Webhook Endpoint Alert</label>
+                        <input id="configWebhook" type="text" placeholder="https://hooks.slack.com/services/..." class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-yellow-500">
+                    </div>
+                    <button type="submit" class="w-full bg-yellow-600 hover:bg-yellow-550 text-black py-2.5 rounded-lg font-bold text-sm transition duration-150">Salvar Configurações</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Audit Logs Table Section -->
+        <section class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div class="flex justify-between items-center mb-4">
+                <h4 class="text-sm font-bold text-gray-200 flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"></span> Real-Time Security Incident & Request Logs (PII Sanitized)
+                </h4>
+                <div class="flex items-center gap-3 text-xs">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="autoRefreshCheckbox" checked class="rounded border-gray-850 bg-gray-950 text-green-600 focus:ring-0">
+                        <span>Auto-Refresh (5s)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto custom-scrollbar">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="border-b border-gray-800 text-gray-400 font-semibold bg-gray-950 bg-opacity-30">
+                            <th class="p-3">ID</th>
+                            <th class="p-3">Timestamp</th>
+                            <th class="p-3">IP Address</th>
+                            <th class="p-3">Endpoint</th>
+                            <th class="p-3">Threats Detected</th>
+                            <th class="p-3 text-center">Status</th>
+                            <th class="p-3 text-center">Action</th>
+                            <th class="p-3">Payload (PII Cleaned)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditLogsBody" class="divide-y divide-gray-850">
+                        <tr>
+                            <td colspan="8" class="p-4 text-center text-gray-500 italic">Carregando logs...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 border-t border-gray-800 px-6 py-4 mt-auto text-center text-xs text-gray-400">
+        Desenvolvido pelo time de DevSecOps & AppSec | Enterprise-grade Application Shield.
+    </footer>
+
+    <!-- App Dashboard Scripts -->
+    <script>
+        let threatChartInstance = null;
+
+        document.addEventListener("DOMContentLoaded", () => {
+            refreshDashboard();
+
+            // Setup auto-refresh intervals
+            setInterval(() => {
+                if (document.getElementById("autoRefreshCheckbox").checked) {
+                    refreshDashboard();
+                }
+            }, 5000);
+        });
+
+        async function refreshDashboard() {
+            try {
+                // Fetch Metrics
+                const metricsRes = await fetch("/admin/metrics");
+                const metrics = await metricsRes.json();
+
+                // Update Badge & Mode Configs
+                const modeBadge = document.getElementById("currentModeBadge");
+                modeBadge.innerText = metrics.system_mode.toUpperCase();
+                if (metrics.system_mode === "enforcement") {
+                    modeBadge.className = "text-xs font-black px-2.5 py-1 rounded bg-red-950 text-red-400 border border-red-800";
+                } else {
+                    modeBadge.className = "text-xs font-black px-2.5 py-1 rounded bg-yellow-950 text-yellow-400 border border-yellow-800";
+                }
+
+                // Update Top Stats
+                document.getElementById("statTotalInspected").innerText = metrics.total_requests_inspected;
+                document.getElementById("statBlocked").innerText = metrics.mitigation_actions.blocked;
+                document.getElementById("statFlagged").innerText = metrics.mitigation_actions.flagged;
+                document.getElementById("statBlockedIPs").innerText = metrics.active_blocked_ips;
+
+                // Update config inputs if they aren't active
+                if (document.activeElement !== document.getElementById("configMode")) {
+                    document.getElementById("configMode").value = metrics.system_mode;
+                }
+
+                // Load active blocklist list
+                await refreshBlocklist();
+
+                // Load logs
+                await refreshLogs();
+
+                // Render/Update Chart
+                renderThreatChart(metrics.threat_breakdown);
+
+            } catch (err) {
+                console.error("Failed to refresh AppSec Dashboard metrics: ", err);
+            }
+        }
+
+        async function refreshBlocklist() {
+            try {
+                const res = await fetch("/admin/blocklist");
+                const blocks = await res.json();
+                const listDiv = document.getElementById("activeBlockedIpsList");
+
+                if (blocks.length === 0) {
+                    listDiv.innerHTML = `<p class="text-gray-500 italic">Nenhum IP bloqueado ativo.</p>`;
+                    return;
+                }
+
+                listDiv.innerHTML = blocks.map(b => `
+                    <div class="flex items-center justify-between bg-gray-950 border border-gray-850 rounded px-2 py-1.5">
+                        <div>
+                            <span class="font-bold text-gray-300">${b.ip_address}</span>
+                            <p class="text-[10px] text-gray-500">Expira em: ${new Date(b.expires_at).toLocaleTimeString()}</p>
+                            <p class="text-[10px] text-red-400 italic font-medium truncate w-40">${b.reason}</p>
+                        </div>
+                        <button onclick="unblockIP('${b.ip_address}')" class="text-purple-400 hover:text-purple-300 hover:underline text-[10px] font-semibold">Liberar</button>
+                    </div>
+                `).join('');
+
+            } catch (err) {
+                console.error("Failed to load blocklist: ", err);
+            }
+        }
+
+        async function refreshLogs() {
+            try {
+                const res = await fetch("/admin/logs");
+                const logs = await res.json();
+                const tbody = document.getElementById("auditLogsBody");
+
+                if (logs.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="8" class="p-8 text-center text-gray-500 italic">Nenhum log registrado de auditoria ainda.</td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                tbody.innerHTML = logs.map(l => {
+                    let badgeClass = "bg-gray-800 text-gray-300";
+                    if (l.mitigation_action === "blocked") {
+                        badgeClass = "bg-red-950 text-red-400 border border-red-900";
+                    } else if (l.mitigation_action === "flagged") {
+                        badgeClass = "bg-yellow-950 text-yellow-400 border border-yellow-900";
+                    } else {
+                        badgeClass = "bg-green-950 text-green-400 border border-green-900";
+                    }
+
+                    const threatsBadge = l.threats_detected.length > 0
+                        ? l.threats_detected.map(t => `<span class="bg-red-900 text-red-300 px-1.5 py-0.5 rounded text-[10px] font-semibold mr-1 inline-block mt-1">${t}</span>`).join('')
+                        : `<span class="text-gray-500">-</span>`;
+
+                    const dt = new Date(l.timestamp).toLocaleTimeString();
+
+                    return `
+                        <tr class="hover:bg-gray-850 hover:bg-opacity-40 transition">
+                            <td class="p-3 text-gray-400 font-mono">${l.id}</td>
+                            <td class="p-3 text-gray-300 whitespace-nowrap">${dt}</td>
+                            <td class="p-3 font-mono font-semibold text-gray-300">${l.ip_address}</td>
+                            <td class="p-3 text-gray-300 font-mono">${l.method} ${l.path}</td>
+                            <td class="p-3">${threatsBadge}</td>
+                            <td class="p-3 text-center"><span class="font-bold text-gray-300">${l.status_code}</span></td>
+                            <td class="p-3 text-center">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${badgeClass}">${l.mitigation_action}</span>
+                            </td>
+                            <td class="p-3 text-gray-400 font-mono truncate max-w-xs" title="${l.sanitized_payload || ''}">${l.sanitized_payload || '-'}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                console.error("Failed to load audit logs: ", err);
+            }
+        }
+
+        function renderThreatChart(breakdown) {
+            const ctx = document.getElementById('threatChart').getContext('2d');
+            const labels = Object.keys(breakdown);
+            const dataValues = Object.values(breakdown);
+
+            // Check if there are values, else show zero/empty
+            const hasData = dataValues.some(v => v > 0);
+
+            if (threatChartInstance) {
+                threatChartInstance.destroy();
+            }
+
+            threatChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: hasData ? dataValues : labels.map(() => 0),
+                        backgroundColor: [
+                            'rgba(239, 68, 68, 0.8)',   // SQLi
+                            'rgba(245, 158, 11, 0.8)',  // XSS
+                            'rgba(59, 130, 246, 0.8)',   // Traversal
+                            'rgba(167, 139, 250, 0.8)',  // ML Anomaly
+                            'rgba(236, 72, 153, 0.8)'    // Rate Limit
+                        ],
+                        borderColor: '#111827',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#9ca3af',
+                                font: { size: 10 }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function toggleMode() {
+            try {
+                const badge = document.getElementById("currentModeBadge");
+                const current = badge.innerText.toLowerCase();
+                const nextMode = current === "enforcement" ? "audit" : "enforcement";
+
+                const formData = new URLSearchParams();
+                formData.append("mode", nextMode);
+
+                const res = await fetch("/admin/config", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: formData
+                });
+
+                if (res.ok) {
+                    refreshDashboard();
+                }
+            } catch (err) {
+                console.error("Failed to toggle mode: ", err);
+            }
+        }
+
+        async function blockIP() {
+            const input = document.getElementById("blockIpInput");
+            const ip = input.value.trim();
+            if (!ip) return;
+
+            try {
+                const formData = new URLSearchParams();
+                formData.append("ip", ip);
+                formData.append("duration", "600"); // 10 minutes default manual
+                formData.append("reason", "Manual Block from dashboard SOC");
+
+                const res = await fetch("/admin/blocklist", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: formData
+                });
+
+                if (res.ok) {
+                    input.value = "";
+                    refreshDashboard();
+                } else {
+                    const body = await res.json();
+                    alert(body.error || "Failed to block IP");
+                }
+            } catch (err) {
+                console.error("Failed to block IP: ", err);
+            }
+        }
+
+        async function unblockIP(ip) {
+            try {
+                const res = await fetch(`/admin/blocklist/unblock?ip=${ip}`, {
+                    method: "POST"
+                });
+                if (res.ok) {
+                    refreshDashboard();
+                }
+            } catch (err) {
+                console.error("Failed to unblock IP: ", err);
+            }
+        }
+
+        async function saveConfig(event) {
+            event.preventDefault();
+            const mode = document.getElementById("configMode").value;
+            const rateLimit = document.getElementById("configRateLimit").value;
+            const webhook = document.getElementById("configWebhook").value;
+
+            try {
+                const formData = new URLSearchParams();
+                formData.append("mode", mode);
+                formData.append("rate_limit_requests_per_min", rateLimit);
+                formData.append("webhook_url", webhook);
+
+                const res = await fetch("/admin/config", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: formData
+                });
+
+                if (res.ok) {
+                    alert("Configurações atualizadas com sucesso!");
+                    refreshDashboard();
+                } else {
+                    alert("Falha ao salvar configurações");
+                }
+            } catch (err) {
+                console.error("Failed to save config: ", err);
+            }
+        }
+
+        async function retrainModel() {
+            try {
+                const res = await fetch("/admin/retrain", { method: "POST" });
+                if (res.ok) {
+                    alert("Isolation Forest retraining successfully triggered in background!");
+                } else {
+                    alert("Retraining failed or not enough request history data.");
+                }
+            } catch (err) {
+                console.error("Error triggering retraining: ", err);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+services:
+  appsec-service:
+    build: .
+    container_name: appsec-protection-engine
+    ports:
+      - "8000:8000"
+    volumes:
+      - appsec-data:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APPSEC_DB_PATH=/app/appsec_security.db
+    networks:
+      - appsec-network
+    restart: unless-stopped
+
+networks:
+  appsec-network:
+    driver: bridge
+
+volumes:
+  appsec-data:
+    driver: local
